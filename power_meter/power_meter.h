@@ -39,10 +39,12 @@ namespace Project {
         inline static constexpr etl::Time timeout = etl::time::seconds(1);
         inline static constexpr uint8_t defaultAddress = 0xF8;
 
-        constexpr PowerMeter(PowerMeterValues& values, periph::UART &uart)
+        struct ConstructorArgs {PowerMeterValues &values; periph::UART &uart;};
+
+        constexpr PowerMeter(ConstructorArgs args)
         : address(defaultAddress)
-        , values(values)
-        , uart(uart) {}
+        , values(args.values)
+        , uart(args.uart) {}
 
         /// init uart and notifier
         void init();
