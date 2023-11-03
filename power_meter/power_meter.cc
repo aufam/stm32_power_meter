@@ -39,24 +39,24 @@ static const uint16_t crcTable[] = {
 };
 
 fun PowerMeter::init() -> void {
-    uart.setBaudRate(9600);
-    uart.init(); 
-    uart.rxCallbackList.push(etl::bind<&PowerMeter::rxCallback>(this));
-    notifier.init();
+    uart.init({
+        .baudrate=9600, 
+        .rxCallback=etl::bind<&PowerMeter::rxCallback>(this)
+    }); 
     timer.init({
-        .function={
-            lambda (PowerMeter* self) {
-                val bufferSend = makeBufferSend(self->address, CMD_READ_INPUT_REGISTER, REG_VOLTAGE, REG_TOTAL);
-                memcpy(self->uart.rxBuffer.data(), bufferSend.data(), bufferSend.len());
-                self->uart.transmit(self->uart.rxBuffer.data(), bufferSend.len());
-            }, this, 
-        },
+        .function={ lambda (PowerMeter* self) {
+            val bufferSend = makeBufferSend(self->address, CMD_READ_INPUT_REGISTER, REG_VOLTAGE, REG_TOTAL);
+            memcpy(self->uart.rxBuffer.data(), bufferSend.data(), bufferSend.len());
+            self->uart.transmit(self->uart.rxBuffer.data(), bufferSend.len());
+        }, this, },
         .interval=timeout
     });
+    notifier.init();
 }
 
 fun PowerMeter::deinit() -> void {
-    uart.deinit();
+    uart.deinit({.rxCallback=etl::bind<&PowerMeter::rxCallback>(this)});
+    timer.deinit();
     notifier.deinit();
 }
 
