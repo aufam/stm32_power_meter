@@ -138,7 +138,7 @@ fun PowerMeter::crc(const uint8_t *data, size_t len) -> uint16_t {
 
 fun PowerMeter::decode(const uint8_t* buf, uint32_t reg) -> uint32_t {
     val &data = etl::array_cast<uint8_t, 2>(&buf[START_BYTES + reg * 2]);
-    return etl::byte_array_cast_back_le<uint16_t>(data); 
+    return etl::byte_array_cast_back_be<uint16_t>(data); 
 }
 
 fun PowerMeter::decode(const uint8_t* buf, PowerMeterValues& values) -> void {
@@ -153,13 +153,13 @@ fun PowerMeter::decode(const uint8_t* buf, PowerMeterValues& values) -> void {
 }
 
 fun PowerMeter::rxCallback(const uint8_t* buf, size_t len) -> void {
-    val values = START_BYTES + (REG_TOTAL * 2) + STOP_BYTES;
+    val lenval = START_BYTES + (REG_TOTAL * 2) + STOP_BYTES;
     val getter = START_BYTES + 2 + STOP_BYTES;
     val setter = BufferSend::size();
     val reset  = 4;
     val calib  = 6;
 
-    if (len == values)
+    if (len == lenval)
         decode(buf, values);
     elif (len == getter) 
         notifier | FLAG_GETTER;
