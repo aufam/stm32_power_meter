@@ -120,8 +120,8 @@ fun PowerMeter::makeBufferSend(uint8_t address, uint8_t cmd, uint16_t registerAd
     buf[5] = (nRegister >> 0) & 0xFF;
 
     auto checksum = crc(buf.data(), 6);
-    buf[6] = (checksum >> 8) & 0xFF;
-    buf[7] = (checksum >> 0) & 0xFF;
+    buf[6] = (checksum >> 0) & 0xFF;
+    buf[7] = (checksum >> 8) & 0xFF;
     return buf;
 }
 
