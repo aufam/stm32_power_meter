@@ -12,5 +12,4 @@ target_include_directories(power_meter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(power_meter PUBLIC -DPOWER_METER_VERSION="${POWER_METER_VERSION}")
 
 # depends
-target_link_libraries(power_meter etl)
-target_link_libraries(power_meter periph)
+target_link_libraries(power_meter modbus)

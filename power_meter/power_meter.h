@@ -1,13 +1,9 @@
 #ifndef PROJECT_POWER_METER_H
 #define PROJECT_POWER_METER_H
 
-#include "periph/uart.h"
-#include "etl/event.h"
-#include "etl/timer.h"
-#include "etl/array.h"
-#include "etl/numerics.h"
+#include "modbus/rtu/client.h"
 #include "etl/getter_setter.h"
-#include "etl/function.h"
+#include <cmath>
 
 namespace Project { struct PowerMeterValues; class PowerMeter; }
 
@@ -23,85 +19,91 @@ struct Project::PowerMeterValues {
 
 /// power meter using PZEM-004t. UART 9600.
 /// see https://innovatorsguru.com/wp-content/uploads/2019/06/PZEM-004T-V3.0-Datasheet-User-Manual.pdf
-class Project::PowerMeter {
+class Project::PowerMeter : public modbus::rtu::Client {
     template <typename T>
-    using GetterSetter = etl::GetterSetter<T, etl::Function<T(), PowerMeter*>, etl::Function<bool(T), PowerMeter*>>;
+    using GetterSetterFuture = etl::GetterSetter<etl::Future<T>, 
+        etl::Function<etl::Future<T>(), PowerMeter*>, 
+        etl::Function<etl::Future<void>(T), PowerMeter*>
+    >;
 
-    etl::Event notifier;
-    etl::Timer timer;
-    uint8_t address;
-    PowerMeterValues& values;
-    public: periph::UART &uart;
+    template <typename T>
+    using GetterFuture = etl::Getter<etl::Future<T>, 
+        etl::Function<etl::Future<T>(), PowerMeter*>
+    >;
 
 public:
-    using BufferSend = etl::Array<uint8_t, 8>;
-    inline static constexpr etl::Time timeout = etl::time::seconds(1);
-    inline static constexpr uint8_t defaultAddress = 0xF8;
+    inline static constexpr int defaultAddress = 0xF8;
 
-    struct ConstructorArgs {PowerMeterValues &values; periph::UART &uart;};
-    constexpr PowerMeter(ConstructorArgs args)
-        : address(defaultAddress)
-        , values(args.values)
-        , uart(args.uart) {}
-
-    /// init uart and notifier
-    void init();
-
-    /// deinit uart and notifier
-    void deinit();
+    using modbus::rtu::Client::Client;
 
     /// get voltage
-    const float& voltage = values.voltage;
+    const GetterFuture<float> voltage = {
+        .get=etl::bind<&PowerMeter::getVoltage>(this),
+    };
 
     /// get current
-    const float& current = values.current;
+    const GetterFuture<float> current = {
+        .get=etl::bind<&PowerMeter::getCurrent>(this),
+    };
 
     /// get power
-    const float& power = values.power;
+    const GetterFuture<float> power = {
+        .get=etl::bind<&PowerMeter::getPower>(this),
+    };
 
     /// get energy
-    const float& energy = values.energy;
+    const GetterFuture<float> energy = {
+        .get=etl::bind<&PowerMeter::getEnergy>(this),
+    };
 
     /// get frequency
-    const float& frequency = values.frequency;
+    const GetterFuture<float> frequency = {
+        .get=etl::bind<&PowerMeter::getFrequency>(this),
+    };
 
     /// get power factor
-    const float& powerFactor = values.powerFactor;
+    const GetterFuture<float> powerFactor = {
+        .get=etl::bind<&PowerMeter::getPowerFactor>(this),
+    };
 
     /// get alarm
-    const bool& alarm = values.alarm;
+    const GetterFuture<bool> alarm = {
+        .get=etl::bind<&PowerMeter::getAlarm>(this),
+    };
 
     /// get and set power threshold
-    GetterSetter<float> powerThreshold = {
-        etl::bind<&PowerMeter::getAlarmThreshold>(this),
-        etl::bind<&PowerMeter::setAlarmThreshold>(this)
+    const GetterSetterFuture<float> powerThreshold = {
+        .get=etl::bind<&PowerMeter::getPowerThreshold>(this),
+        .set=etl::bind<&PowerMeter::setPowerThreshold>(this)
     };
 
     /// get and set device address
-    GetterSetter<uint8_t> deviceAddress = {
-        etl::bind<&PowerMeter::getDeviceAddress>(this),
-        etl::bind<&PowerMeter::setDeviceAddress>(this)
+    const GetterSetterFuture<uint8_t> deviceAddress = {
+        .get=etl::bind<&PowerMeter::getDeviceAddress>(this),
+        .set=etl::bind<&PowerMeter::setDeviceAddress>(this)
     };
 
-    bool resetEnergy();
-    bool calibrate();
+    etl::Future<PowerMeterValues> fetchAll();
+
+    etl::Future<void> resetEnergy();
+    etl::Future<void> calibrate();
 
 private:
-    float getAlarmThreshold();
-    uint8_t getDeviceAddress();
-    bool setAlarmThreshold(float power);
-    bool setDeviceAddress(uint8_t newAddress);
-    void rxCallback(const uint8_t* buf, size_t len);
+    etl::Future<float> getVoltage();
+    etl::Future<float> getCurrent();
+    etl::Future<float> getPower();
+    etl::Future<float> getEnergy();
+    etl::Future<float> getFrequency();
+    etl::Future<float> getPowerFactor();
+    etl::Future<bool> getAlarm();
 
-    static BufferSend makeBufferSend(uint8_t address, uint8_t cmd, uint16_t registerAddress, uint16_t nRegister);
-    static uint16_t crc(const uint8_t *data, size_t len);
-    static uint32_t decode(const uint8_t* buf, uint32_t reg);
-    static void decode(const uint8_t* buf, PowerMeterValues& values);
+    etl::Future<float> getPowerThreshold();
+    etl::Future<void> setPowerThreshold(float power);
+
+    etl::Future<uint8_t> getDeviceAddress();
+    etl::Future<void> setDeviceAddress(uint8_t newAddress);
 
     enum : uint8_t {
-        CMD_READ_HOLDING_REGISTER   = 0x03,
-        CMD_READ_INPUT_REGISTER     = 0x04,
-        CMD_WRITE_SINGLE_REGISTER   = 0x06,
         CMD_CALIBRATION             = 0x41,
         CMD_RESET_ENERGY            = 0x42,
     };
@@ -121,16 +123,6 @@ private:
 
         REG_ALARM_THRESHOLD = 0x0001,
         REG_DEVICE_ADDRESS  = 0x0002,
-    };
-    
-    enum : uint32_t {
-        FLAG_GETTER = 0b010,
-        FLAG_SETTER = 0b100,
-    };
-
-    enum : uint32_t {
-        START_BYTES = 3,
-        STOP_BYTES = 2
     };
 };
 
